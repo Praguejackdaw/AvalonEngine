@@ -18,9 +18,9 @@ namespace Avalon {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO(); (void)io;
-        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+        // io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Disable ImGui keyboard navigation to free W,S,A,D for camera roaming
         io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
-        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+        // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Disable Multi-Viewport to keep OS focus on the main GLFW window for stable WASD inputs
 
         // Setup Dear ImGui style (Modern Dark & Sleek)
         ImGui::StyleColorsDark();

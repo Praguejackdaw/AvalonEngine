@@ -17,19 +17,17 @@ namespace Avalon {
         glm::vec2 TexCoords;
     };
 
-    struct MeshTexture {
-        std::shared_ptr<Texture> TextureInstance;
-        std::string Type; // e.g. "texture_diffuse", "texture_specular"
-    };
+    class Material;
 
     class Mesh {
     public:
-        Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::vector<MeshTexture>& textures);
+        Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::shared_ptr<Material>& material);
         ~Mesh() = default;
 
         void Draw(const std::shared_ptr<Shader>& shader);
 
         const std::shared_ptr<VertexArray>& GetVertexArray() const { return m_VertexArray; }
+        const std::shared_ptr<Material>& GetMaterial() const { return m_Material; }
 
     private:
         void SetupMesh();
@@ -37,7 +35,7 @@ namespace Avalon {
     private:
         std::vector<Vertex> m_Vertices;
         std::vector<uint32_t> m_Indices;
-        std::vector<MeshTexture> m_Textures;
+        std::shared_ptr<Material> m_Material;
 
         std::shared_ptr<VertexArray> m_VertexArray;
     };

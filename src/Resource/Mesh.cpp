@@ -3,13 +3,13 @@
 #include "Renderer/Buffer.h"
 #include "Renderer/RenderCommand.h"
 #include "Shader/Shader.h"
-#include "Resource/Texture.h"
+#include "Resource/Material.h"
 #include <iostream>
 
 namespace Avalon {
 
-    Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::vector<MeshTexture>& textures)
-        : m_Vertices(vertices), m_Indices(indices), m_Textures(textures) {
+    Mesh::Mesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, const std::shared_ptr<Material>& material)
+        : m_Vertices(vertices), m_Indices(indices), m_Material(material) {
         SetupMesh();
     }
 
@@ -39,30 +39,11 @@ namespace Avalon {
     }
 
     void Mesh::Draw(const std::shared_ptr<Shader>& shader) {
-        uint32_t diffuseNr  = 1;
-        uint32_t specularNr = 1;
-        uint32_t normalNr   = 1;
-
-        // Bind all associated textures to their respective texture unit slots
-        for (uint32_t i = 0; i < m_Textures.size(); i++) {
-            m_Textures[i].TextureInstance->Bind(i);
-
-            std::string number;
-            std::string name = m_Textures[i].Type;
-            if (name == "texture_diffuse") {
-                number = std::to_string(diffuseNr++);
-            } else if (name == "texture_specular") {
-                number = std::to_string(specularNr++);
-            } else if (name == "texture_normal") {
-                number = std::to_string(normalNr++);
-            }
-
-            // DSA: Directly updates shader sampler unit index
-            shader->SetInt(name + number, static_cast<int>(i));
+        if (m_Material) {
+            m_Material->Bind(shader);
         }
-
         // Draw mesh elements
-        RenderCommand::DrawIndexed(m_VertexArray);
+        RenderCommandAPI::DrawIndexed(m_VertexArray);
     }
 
 } // namespace Avalon

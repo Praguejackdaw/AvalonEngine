@@ -28,12 +28,12 @@ namespace Avalon {
         void LoadModel(const std::string& path);
         void ProcessNode(aiNode* node, const aiScene* scene);
         Mesh ProcessMesh(aiMesh* mesh, const aiScene* scene);
-        std::vector<MeshTexture> LoadMaterialTextures(aiMaterial* mat, aiTextureType type, const std::string& typeName);
+        std::shared_ptr<Texture> LoadMaterialTexture(aiMaterial* mat, aiTextureType type);
 
     private:
         std::vector<Mesh> m_Meshes;
         std::string m_Directory;
-        std::vector<MeshTexture> m_TexturesLoaded; // Cache to prevent duplicate textures load
+        std::vector<std::shared_ptr<Texture>> m_TexturesLoaded; // Cache to prevent duplicate textures load
     };
 
 } // namespace Avalon

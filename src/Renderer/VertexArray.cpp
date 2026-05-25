@@ -35,9 +35,12 @@ namespace Avalon {
     VertexArray::VertexArray(VertexArray&& other) noexcept
         : m_RendererID(other.m_RendererID),
           m_VertexBufferIndex(other.m_VertexBufferIndex),
+          m_AttribIndex(other.m_AttribIndex),
           m_VertexBuffers(std::move(other.m_VertexBuffers)),
           m_IndexBuffer(std::move(other.m_IndexBuffer)) {
         other.m_RendererID = 0;
+        other.m_VertexBufferIndex = 0;
+        other.m_AttribIndex = 0;
     }
 
     // Move Assignment
@@ -47,10 +50,13 @@ namespace Avalon {
 
             m_RendererID = other.m_RendererID;
             m_VertexBufferIndex = other.m_VertexBufferIndex;
+            m_AttribIndex = other.m_AttribIndex;
             m_VertexBuffers = std::move(other.m_VertexBuffers);
             m_IndexBuffer = std::move(other.m_IndexBuffer);
 
             other.m_RendererID = 0;
+            other.m_VertexBufferIndex = 0;
+            other.m_AttribIndex = 0;
         }
         return *this;
     }
@@ -80,7 +86,6 @@ namespace Avalon {
         );
 
         const auto& layout = vertexBuffer->GetLayout();
-        static uint32_t attribIndex = 0; // Tracks the current layout location index
 
         for (const auto& element : layout) {
             switch (element.Type) {
@@ -94,12 +99,12 @@ namespace Avalon {
                 case ShaderDataType::Int4:
                 case ShaderDataType::Bool: {
                     // DSA: Enable the vertex attribute location index
-                    glEnableVertexArrayAttrib(m_RendererID, attribIndex);
+                    glEnableVertexArrayAttrib(m_RendererID, m_AttribIndex);
 
                     // DSA: Specify format of the vertex attribute
                     glVertexArrayAttribFormat(
                         m_RendererID,
-                        attribIndex,
+                        m_AttribIndex,
                         element.GetComponentCount(),
                         ShaderDataTypeToOpenGLBaseType(element.Type),
                         element.Normalized ? GL_TRUE : GL_FALSE,
@@ -107,8 +112,8 @@ namespace Avalon {
                     );
 
                     // DSA: Bind attribute index to the VertexBuffer slot index
-                    glVertexArrayAttribBinding(m_RendererID, attribIndex, bindingIndex);
-                    attribIndex++;
+                    glVertexArrayAttribBinding(m_RendererID, m_AttribIndex, bindingIndex);
+                    m_AttribIndex++;
                     break;
                 }
                 case ShaderDataType::Mat3:
@@ -116,22 +121,22 @@ namespace Avalon {
                     // Matrices take multiple layout locations (columns)
                     uint8_t count = element.GetComponentCount();
                     for (uint8_t i = 0; i < count; i++) {
-                        glEnableVertexArrayAttrib(m_RendererID, attribIndex);
+                        glEnableVertexArrayAttrib(m_RendererID, m_AttribIndex);
                         
                         glVertexArrayAttribFormat(
                             m_RendererID,
-                            attribIndex,
+                            m_AttribIndex,
                             count,
                             ShaderDataTypeToOpenGLBaseType(element.Type),
                             element.Normalized ? GL_TRUE : GL_FALSE,
                             static_cast<GLuint>(element.Offset + i * count * sizeof(float))
                         );
 
-                        glVertexArrayAttribBinding(m_RendererID, attribIndex, bindingIndex);
+                        glVertexArrayAttribBinding(m_RendererID, m_AttribIndex, bindingIndex);
                         
                         // Inform OpenGL this column behaves as part of an instance or custom index step if needed, but for standard formats:
                         glVertexArrayBindingDivisor(m_RendererID, bindingIndex, 0); 
-                        attribIndex++;
+                        m_AttribIndex++;
                     }
                     break;
                 }

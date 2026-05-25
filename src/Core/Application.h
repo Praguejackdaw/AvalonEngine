@@ -15,6 +15,7 @@ namespace Avalon {
     class VertexArray;
     class Scene;
     class Framebuffer;
+    class ForwardRenderer;
 
     struct ApplicationSpecification {
         std::string Name = "Avalon Engine";
@@ -58,12 +59,13 @@ namespace Avalon {
         std::unique_ptr<Window> m_Window;
         std::unique_ptr<UIManager> m_UIManager;
         
-        std::unique_ptr<FPSCamera> m_Camera;
+        std::shared_ptr<FPSCamera> m_Camera;
         std::shared_ptr<Shader> m_Shader;
         std::shared_ptr<VertexArray> m_CubeVAO;
         
         std::unique_ptr<Scene> m_Scene;
         std::unique_ptr<Framebuffer> m_Framebuffer;
+        std::shared_ptr<ForwardRenderer> m_Renderer;
 
         bool m_Running = true;
         float m_LastFrameTime = 0.0f;
@@ -73,6 +75,20 @@ namespace Avalon {
         bool m_AutoRotate = true;
         float m_RotationSpeed = 45.0f;
         glm::vec4 m_ClearColor = glm::vec4(0.08f, 0.08f, 0.10f, 1.00f);
+
+        // Light adjustment parameters
+        glm::vec3 m_DirLightDir = glm::vec3(-0.2f, -1.0f, -0.3f);
+        glm::vec3 m_DirLightColor = glm::vec3(1.0f, 0.95f, 0.9f);
+        float m_DirLightIntensity = 1.0f;
+
+        glm::vec3 m_PointLightPos = glm::vec3(2.0f, 2.0f, 2.0f);
+        glm::vec3 m_PointLightColor = glm::vec3(1.0f, 0.2f, 0.2f);
+        float m_PointLightIntensity = 2.0f;
+
+        glm::vec3 m_SpotLightColor = glm::vec3(1.0f, 1.0f, 1.0f);
+        float m_SpotLightIntensity = 5.0f;
+        float m_SpotLightAngle = 12.5f;
+        float m_SpotLightOuterAngle = 17.5f;
 
         static Application* s_Instance;
     };

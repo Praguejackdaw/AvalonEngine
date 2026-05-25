@@ -24,6 +24,12 @@ add_executable(AvalonEngine
     Renderer/Framebuffer.h
     Renderer/Framebuffer.cpp
     Renderer/Light.h
+    Renderer/LightManager.h
+    Renderer/LightManager.cpp
+    Renderer/RenderQueue.h
+    Renderer/RenderQueue.cpp
+    Renderer/ForwardRenderer.h
+    Renderer/ForwardRenderer.cpp
     
     Shader/Shader.h
     Shader/Shader.cpp
@@ -32,6 +38,8 @@ add_executable(AvalonEngine
     Resource/Texture.cpp
     Resource/Mesh.h
     Resource/Mesh.cpp
+    Resource/Material.h
+    Resource/Material.cpp
     Resource/Model.h
     Resource/Model.cpp
     Resource/ResourceManager.h

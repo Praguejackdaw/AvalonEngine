@@ -39,6 +39,7 @@ namespace Avalon {
     private:
         uint32_t m_RendererID = 0;
         uint32_t m_VertexBufferIndex = 0; // Tracks binding slots (bindingIndex) for DSA
+        uint32_t m_AttribIndex = 0;        // Tracks the attribute layout location index for DSA
         std::vector<std::shared_ptr<VertexBuffer>> m_VertexBuffers;
         std::shared_ptr<IndexBuffer> m_IndexBuffer;
     };

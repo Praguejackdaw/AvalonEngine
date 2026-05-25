@@ -4,6 +4,8 @@
 #include "stb_image.h"
 #include <iostream>
 #include <stdexcept>
+#include <cmath>
+#include <algorithm>
 
 namespace Avalon {
 
@@ -27,8 +29,11 @@ namespace Avalon {
         // DSA: Create 2D texture unit
         glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
 
-        // Allocate immutable storage (1 mip level for base allocation)
-        glTextureStorage2D(m_RendererID, 4, GL_RGBA8, m_Width, m_Height);
+        // Calculate the maximum number of mipmap levels dynamically
+        GLsizei levels = static_cast<GLsizei>(std::floor(std::log2(std::max(width, height)))) + 1;
+
+        // Allocate immutable storage
+        glTextureStorage2D(m_RendererID, levels, GL_RGBA8, m_Width, m_Height);
 
         // DSA: Set sampler parameters directly on the texture unit
         glTextureParameteri(m_RendererID, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);

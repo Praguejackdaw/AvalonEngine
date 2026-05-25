@@ -223,6 +223,13 @@ namespace Avalon {
         }
     }
 
+    void Shader::SetMat3(const std::string& name, const glm::mat3& value) {
+        int location = GetUniformLocation(name);
+        if (location != -1) {
+            glProgramUniformMatrix3fv(m_RendererID, location, 1, GL_FALSE, glm::value_ptr(value));
+        }
+    }
+
     void Shader::SetMat4(const std::string& name, const glm::mat4& value) {
         int location = GetUniformLocation(name);
         if (location != -1) {

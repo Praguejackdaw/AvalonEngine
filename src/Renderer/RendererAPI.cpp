@@ -60,8 +60,6 @@ namespace Avalon {
             vertexArray->Bind();
             uint32_t count = indexCount == 0 ? vertexArray->GetIndexBuffer()->GetCount() : indexCount;
             glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, nullptr);
-            // Non-binding DSA allows us to keep VAO unbound cleanly afterwards
-            vertexArray->Unbind();
         }
     };
 

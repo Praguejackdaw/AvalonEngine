@@ -11,6 +11,8 @@
 #include "Resource/Scene.h"
 #include "Renderer/Framebuffer.h"
 #include "Resource/ResourceManager.h"
+#include "Renderer/ForwardRenderer.h"
+#include "Resource/Material.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -44,12 +46,16 @@ namespace Avalon {
         // Initialize Renderer base configurations
         Renderer::Init();
 
+        // Initialize ForwardRenderer Orchestrator
+        m_Renderer = ForwardRenderer::Create();
+        m_Renderer->Init();
+
         // Initialize UI Layer (ImGui)
         m_UIManager = std::make_unique<UIManager>();
         m_UIManager->Init();
 
         // Setup Euler-based FPS roaming camera
-        m_Camera = std::make_unique<FPSCamera>(
+        m_Camera = std::make_shared<FPSCamera>(
             45.0f, 
             static_cast<float>(m_Window->GetWidth()) / static_cast<float>(m_Window->GetHeight()), 
             0.1f, 
@@ -145,6 +151,10 @@ namespace Avalon {
     void Application::Shutdown() {
         m_Scene.reset();
         m_Framebuffer.reset();
+        if (m_Renderer) {
+            m_Renderer->Shutdown();
+            m_Renderer.reset();
+        }
         ResourceManager::Clear();
 
         m_UIManager->Shutdown();
@@ -205,37 +215,84 @@ namespace Avalon {
         // 1. Off-screen Rendering Pass (Render Scene to custom Framebuffer)
         m_Framebuffer->Bind();
         
-        RenderCommand::SetClearColor(m_ClearColor);
+        RenderCommandAPI::SetClearColor(m_ClearColor);
         Renderer::Clear();
 
         // Bind Shader and calculate Model Transform
         glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(m_RotationAngle), glm::vec3(0.5f, 1.0f, 0.0f));
 
-        // Submit geometry to the Renderer pipeline
-        Renderer::BeginScene(m_Camera->GetViewMatrix(), m_Camera->GetProjectionMatrix());
-        
-        // Render cube using Blinn-Phong diffuse lighting shader
-        m_Shader->Bind();
-        m_Shader->SetFloat3("u_ViewPos", m_Camera->GetPosition());
-        Renderer::Submit(m_Shader, m_CubeVAO, model);
+        // Begin ForwardRenderer Frame Setup
+        m_Renderer->BeginFrame(m_Camera);
 
-        Renderer::EndScene();
+        // Retrieve and configure standard material
+        static std::shared_ptr<Material> defaultMaterial = nullptr;
+        if (!defaultMaterial) {
+            defaultMaterial = BlinnPhongMaterial::Create();
+        }
+
+        // Submit draw package
+        m_Renderer->Submit(m_CubeVAO, m_Shader, defaultMaterial, model);
+
+        // Update active LightManager UBO structures
+        auto& lightManager = m_Renderer->GetLightManager();
+        if (lightManager) {
+            lightManager->ClearLights();
+
+            // Directional Light
+            DirectionalLight dirLight;
+            dirLight.Direction = m_DirLightDir;
+            dirLight.Color = m_DirLightColor;
+            dirLight.Intensity = m_DirLightIntensity;
+            lightManager->SetDirectionalLight(dirLight);
+
+            // Point Light
+            PointLight pLight;
+            pLight.Position = m_PointLightPos;
+            pLight.Color = m_PointLightColor;
+            pLight.Intensity = m_PointLightIntensity;
+            pLight.Constant = 1.0f;
+            pLight.Linear = 0.09f;
+            pLight.Quadratic = 0.032f;
+            lightManager->AddPointLight(pLight);
+
+            // Spot Light (places at camera position looking forward)
+            SpotLight sLight;
+            sLight.Position = m_Camera->GetPosition();
+            
+            // Derive camera forward vector from view matrix (third column represents camera z-axis, we invert it for forward)
+            glm::mat4 view = m_Camera->GetViewMatrix();
+            glm::vec3 cameraForward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
+            
+            sLight.Direction = cameraForward;
+            sLight.Color = m_SpotLightColor;
+            sLight.Intensity = m_SpotLightIntensity;
+            sLight.CutOff = glm::cos(glm::radians(m_SpotLightAngle));
+            sLight.OuterCutOff = glm::cos(glm::radians(m_SpotLightOuterAngle));
+            sLight.Constant = 1.0f;
+            sLight.Linear = 0.09f;
+            sLight.Quadratic = 0.032f;
+            lightManager->AddSpotLight(sLight);
+        }
+
+        // Execute drawing pipeline phases
+        m_Renderer->EndFrame();
         
         m_Framebuffer->Unbind();
 
         // 2. On-screen Pass (Clear main screen and draw GUI)
-        RenderCommand::SetClearColor(glm::vec4(0.05f, 0.05f, 0.06f, 1.0f));
+        RenderCommandAPI::SetClearColor(glm::vec4(0.05f, 0.05f, 0.06f, 1.0f));
         Renderer::Clear();
 
         // Render Developer UI overlays (ImGui)
         m_UIManager->Begin();
         
         // Compact, gorgeous, unified controls and diagnostics overlay
-        ImGui::Begin("Avalon Engine Panel v0.2", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Begin("Avalon Engine Panel v0.3", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         
         if (ImGui::CollapsingHeader("System Diagnostics", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("FPS: %.1f FPS", ImGui::GetIO().Framerate);
             ImGui::Text("Frame Time: %.3f ms/frame", 1000.0f / ImGui::GetIO().Framerate);
+            ImGui::Text("Active Draw Calls: %u", m_Renderer ? m_Renderer->GetDrawCallCount() : 0);
             ImGui::Text("Graphics API: OpenGL 4.5 Core Profile (DSA)");
             
             const char* gpuName = (const char*)glGetString(GL_RENDERER);
@@ -250,6 +307,32 @@ namespace Avalon {
             ImGui::TextDisabled("Controls: Hold RMB + WASD/QE");
         }
 
+        if (ImGui::CollapsingHeader("Global Lighting Adjuster", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Directional Light:");
+            ImGui::SliderFloat3("Direction##Dir", &m_DirLightDir.x, -1.0f, 1.0f);
+            m_DirLightDir = glm::normalize(m_DirLightDir);
+            ImGui::ColorEdit3("Color##Dir", &m_DirLightColor.x);
+            ImGui::SliderFloat("Intensity##Dir", &m_DirLightIntensity, 0.0f, 5.0f);
+
+            ImGui::Separator();
+            ImGui::Text("Point Light:");
+            ImGui::SliderFloat3("Position##Point", &m_PointLightPos.x, -10.0f, 10.0f);
+            ImGui::ColorEdit3("Color##Point", &m_PointLightColor.x);
+            ImGui::SliderFloat("Intensity##Point", &m_PointLightIntensity, 0.0f, 10.0f);
+
+            ImGui::Separator();
+            ImGui::Text("Flashlight (Spot Light):");
+            ImGui::ColorEdit3("Color##Spot", &m_SpotLightColor.x);
+            ImGui::SliderFloat("Intensity##Spot", &m_SpotLightIntensity, 0.0f, 20.0f);
+            ImGui::SliderFloat("Inner Angle##Spot", &m_SpotLightAngle, 5.0f, 45.0f);
+            ImGui::SliderFloat("Outer Angle##Spot", &m_SpotLightOuterAngle, 10.0f, 60.0f);
+            
+            // Ensure inner cutoff doesn't exceed outer cutoff
+            if (m_SpotLightAngle > m_SpotLightOuterAngle) {
+                m_SpotLightOuterAngle = m_SpotLightAngle + 2.0f;
+            }
+        }
+
         if (ImGui::CollapsingHeader("Simulation Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Checkbox("Auto-Rotate Object", &m_AutoRotate);
             if (m_AutoRotate) {
@@ -258,6 +341,15 @@ namespace Avalon {
                 ImGui::SliderFloat("Manual Angle", &m_RotationAngle, 0.0f, 360.0f);
             }
             
+            ImGui::Separator();
+            
+            bool wireframe = m_Renderer ? m_Renderer->IsWireframeMode() : false;
+            if (ImGui::Checkbox("Wireframe Mode", &wireframe)) {
+                if (m_Renderer) {
+                    m_Renderer->SetWireframeMode(wireframe);
+                }
+            }
+
             ImGui::Separator();
             
             // Dynamic clear color edit
