@@ -13,6 +13,8 @@ namespace Avalon {
     class FPSCamera;
     class Shader;
     class VertexArray;
+    class Scene;
+    class Framebuffer;
 
     struct ApplicationSpecification {
         std::string Name = "Avalon Engine";
@@ -59,6 +61,9 @@ namespace Avalon {
         std::unique_ptr<FPSCamera> m_Camera;
         std::shared_ptr<Shader> m_Shader;
         std::shared_ptr<VertexArray> m_CubeVAO;
+        
+        std::unique_ptr<Scene> m_Scene;
+        std::unique_ptr<Framebuffer> m_Framebuffer;
 
         bool m_Running = true;
         float m_LastFrameTime = 0.0f;

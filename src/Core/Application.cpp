@@ -8,6 +8,9 @@
 #include "Shader/Shader.h"
 #include "Renderer/VertexArray.h"
 #include "Renderer/Buffer.h"
+#include "Resource/Scene.h"
+#include "Renderer/Framebuffer.h"
+#include "Resource/ResourceManager.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -53,6 +56,15 @@ namespace Avalon {
             100.0f
         );
         m_Camera->SetPosition(glm::vec3(0.0f, 0.0f, 5.0f));
+
+        // Initialize scene and framebuffer allocations
+        m_Scene = std::make_unique<Scene>();
+
+        FramebufferSpecification fbSpec;
+        fbSpec.Width = m_Window->GetWidth();
+        fbSpec.Height = m_Window->GetHeight();
+        fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH24STENCIL8 };
+        m_Framebuffer = std::make_unique<Framebuffer>(fbSpec);
 
         // Load Default Shader (will read vertex/fragment code)
         m_Shader = std::make_shared<Shader>("assets/shaders/default.glsl");
@@ -131,6 +143,10 @@ namespace Avalon {
     }
 
     void Application::Shutdown() {
+        m_Scene.reset();
+        m_Framebuffer.reset();
+        ResourceManager::Clear();
+
         m_UIManager->Shutdown();
         Renderer::Shutdown();
         std::cout << "Engine successfully shut down." << std::endl;
@@ -167,6 +183,12 @@ namespace Avalon {
         // Resize camera aspect ratio if viewport size changed
         m_Camera->SetViewportSize(m_Window->GetWidth(), m_Window->GetHeight());
 
+        // Dynamic Framebuffer resize to match window dimension
+        if (m_Window->GetWidth() != m_Framebuffer->GetSpecification().Width ||
+            m_Window->GetHeight() != m_Framebuffer->GetSpecification().Height) {
+            m_Framebuffer->Resize(m_Window->GetWidth(), m_Window->GetHeight());
+        }
+
         // Update camera position/rotation via keyboard and mouse polling
         m_Camera->OnUpdate(deltaTime);
 
@@ -180,7 +202,9 @@ namespace Avalon {
     }
 
     void Application::OnRender() {
-        // Set clear color dynamically
+        // 1. Off-screen Rendering Pass (Render Scene to custom Framebuffer)
+        m_Framebuffer->Bind();
+        
         RenderCommand::SetClearColor(m_ClearColor);
         Renderer::Clear();
 
@@ -196,12 +220,18 @@ namespace Avalon {
         Renderer::Submit(m_Shader, m_CubeVAO, model);
 
         Renderer::EndScene();
+        
+        m_Framebuffer->Unbind();
+
+        // 2. On-screen Pass (Clear main screen and draw GUI)
+        RenderCommand::SetClearColor(glm::vec4(0.05f, 0.05f, 0.06f, 1.0f));
+        Renderer::Clear();
 
         // Render Developer UI overlays (ImGui)
         m_UIManager->Begin();
         
         // Compact, gorgeous, unified controls and diagnostics overlay
-        ImGui::Begin("Avalon Engine Panel v0.1", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Begin("Avalon Engine Panel v0.2", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         
         if (ImGui::CollapsingHeader("System Diagnostics", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("FPS: %.1f FPS", ImGui::GetIO().Framerate);
@@ -235,6 +265,20 @@ namespace Avalon {
         }
         
         ImGui::End();
+
+        // 3. Render the Viewport panel displaying the Framebuffer color texture!
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowSize(ImVec2(1600.0f, 900.0f), ImGuiCond_FirstUseEver);
+        ImGui::Begin("Render Viewport");
+        
+        uint32_t textureID = m_Framebuffer->GetColorAttachmentRendererID();
+        ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+        
+        // Render texture flipped vertically because OpenGL textures are y-flipped
+        ImGui::Image((void*)(intptr_t)textureID, viewportSize, ImVec2(0, 1), ImVec2(1, 0));
+        
+        ImGui::End();
+        ImGui::PopStyleVar();
 
         m_UIManager->End();
     }

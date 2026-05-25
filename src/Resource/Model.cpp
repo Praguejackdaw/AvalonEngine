@@ -1,6 +1,7 @@
 #include "Resource/Model.h"
 #include "Resource/Texture.h"
 #include "Shader/Shader.h"
+#include "Resource/ResourceManager.h"
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -137,7 +138,7 @@ namespace Avalon {
             if (!skip) {
                 // Texture hasn't been loaded before, construct and load it
                 std::string fullPath = m_Directory + "/" + str.C_Str();
-                auto texture = std::make_shared<Texture>(fullPath);
+                auto texture = ResourceManager::LoadTexture(fullPath);
                 
                 MeshTexture tex;
                 tex.TextureInstance = texture;

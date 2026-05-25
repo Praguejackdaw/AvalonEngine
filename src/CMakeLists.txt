@@ -21,6 +21,9 @@ add_executable(AvalonEngine
     Renderer/VertexArray.cpp
     Renderer/Buffer.h
     Renderer/Buffer.cpp
+    Renderer/Framebuffer.h
+    Renderer/Framebuffer.cpp
+    Renderer/Light.h
     
     Shader/Shader.h
     Shader/Shader.cpp
@@ -31,6 +34,10 @@ add_executable(AvalonEngine
     Resource/Mesh.cpp
     Resource/Model.h
     Resource/Model.cpp
+    Resource/ResourceManager.h
+    Resource/ResourceManager.cpp
+    Resource/Scene.h
+    Resource/Scene.cpp
     
     Camera/Camera.h
     Camera/FPSCamera.h

@@ -4,7 +4,7 @@
 int main() {
     // Instantiate application with default specifications
     Avalon::ApplicationSpecification spec;
-    spec.Name = "Avalon Engine - Realtime Renderer v0.1";
+    spec.Name = "Avalon Engine - Realtime Renderer v0.2";
     spec.Width = 1600;
     spec.Height = 900;
     spec.VSync = true;
