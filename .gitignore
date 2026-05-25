@@ -1,0 +1,76 @@
+# ==========================================
+# AvalonEngine - Git Ignore Configuration
+# ==========================================
+
+# Prerequisites & Temporary Files
+*.d
+*.i
+*.s
+
+# Compiled Object files
+*.o
+*.obj
+*.opt
+*.pdb
+*.ilk
+*.idb
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Libraries (Dynamic/Static)
+*.so
+*.dylib
+*.dll
+*.lib
+*.a
+*.la
+*.lai
+
+# Executables
+*.exe
+*.out
+*.app
+
+# ==========================================
+# Visual Studio / MSBuild Local Cache
+# ==========================================
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.db
+*.opendb
+*.sdf
+*.ipch
+*.VC.db
+*.VC.opendb
+
+# ==========================================
+# VS Code / JetBrains Editors
+# ==========================================
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ==========================================
+# CMake Build Output Directories
+# ==========================================
+build/
+out/
+CMakeFiles/
+CMakeCache.txt
+CMakeUsers.txt
+cmake_install.cmake
+Makefile
+*.make
+FetchContent/
+
+# ==========================================
+# Runtime Config & Cache
+# ==========================================
+imgui.ini
