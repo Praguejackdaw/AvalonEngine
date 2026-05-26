@@ -6,6 +6,11 @@
 
 namespace Avalon {
 
+    struct RenderElement {
+        uint64_t SortKey;
+        uint32_t CommandIndex;
+    };
+
     class RenderQueue {
     public:
         RenderQueue() = default;
@@ -27,6 +32,7 @@ namespace Avalon {
 
     private:
         std::vector<std::unique_ptr<RenderCommand>> m_Queue;
+        std::vector<RenderElement> m_SortQueue;
         uint32_t m_DrawCallCount = 0;
     };
 

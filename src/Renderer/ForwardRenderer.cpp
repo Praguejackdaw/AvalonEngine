@@ -5,6 +5,7 @@
 #include "Renderer/LightManager.h"
 #include "Renderer/RenderQueue.h"
 #include "Renderer/RenderCommand.h"
+#include "Renderer/RenderStateManager.h"
 #include <glad/glad.h>
 #include <iostream>
 
@@ -62,8 +63,8 @@ namespace Avalon {
             glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(transform)));
 
             // Compute 64-bit sort key to minimize state changes
-            // Format: [ Bits 63-48: Shader address hash ] [ Bits 47-32: Material ID ] [ Bits 31-0: Depth/Sequence ]
-            uint64_t shaderKey = (reinterpret_cast<uintptr_t>(shader.get()) & 0xFFFF) << 48;
+            // Format: [ Bits 63-48: Shader ID ] [ Bits 47-32: Material ID ] [ Bits 31-0: Depth/Sequence ]
+            uint64_t shaderKey = (static_cast<uint64_t>(shader->GetShaderID()) & 0xFFFF) << 48;
             uint64_t materialKey = (material ? (material->GetSortKey() & 0xFFFF) : 0) << 32;
             uint64_t sortKey = shaderKey | materialKey;
 
@@ -104,6 +105,9 @@ namespace Avalon {
     protected:
         void BeginFrameSetup() override {
             if (!m_ActiveCamera) return;
+
+            // Enforce clean 3D opaque pipeline rendering states to prevent ImGui or other pass leaks
+            RenderStateManager::ResetToDefault3DState();
 
             // Map Camera details to the UBO
             GPUCameraBufferData cameraData;

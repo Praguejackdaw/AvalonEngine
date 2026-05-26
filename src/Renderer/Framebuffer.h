@@ -9,6 +9,7 @@ namespace Avalon {
         None = 0,
         // Color formats
         RGBA8,
+        RGBA16F,
         // Depth/Stencil formats
         DEPTH24STENCIL8,
         // Depth only component (critical for shadow maps)

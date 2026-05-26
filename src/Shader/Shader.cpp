@@ -9,6 +9,8 @@
 
 namespace Avalon {
 
+    uint32_t Shader::s_NextShaderID = 1;
+
     static GLenum ShaderTypeFromString(const std::string& type) {
         if (type == "vertex") {
             return GL_VERTEX_SHADER;
@@ -21,6 +23,8 @@ namespace Avalon {
 
     Shader::Shader(const std::string& filepath)
         : m_FilePath(filepath) {
+        m_ShaderID = s_NextShaderID++;
+
         // Read file name from path
         size_t lastSlash = filepath.find_last_of("/\\");
         lastSlash = (lastSlash == std::string::npos) ? 0 : lastSlash + 1;
@@ -35,6 +39,8 @@ namespace Avalon {
 
     Shader::Shader(const std::string& name, const std::string& vertexSrc, const std::string& fragmentSrc)
         : m_Name(name) {
+        m_ShaderID = s_NextShaderID++;
+
         std::unordered_map<unsigned int, std::string> sources;
         sources[GL_VERTEX_SHADER] = vertexSrc;
         sources[GL_FRAGMENT_SHADER] = fragmentSrc;
@@ -158,6 +164,12 @@ namespace Avalon {
         }
 
         m_RendererID = program;
+
+        // DSA: Set static texture sampler binding points once upon initialization to avoid redundant updates
+        SetInt("u_Material.AlbedoMap", 0);
+        SetInt("u_Material.MetallicRoughnessMap", 1);
+        SetInt("u_Material.NormalMap", 2);
+        SetInt("u_Material.AOMap", 3);
     }
 
     void Shader::Bind() const {

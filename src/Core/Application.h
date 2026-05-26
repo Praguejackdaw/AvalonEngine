@@ -90,6 +90,12 @@ namespace Avalon {
         float m_SpotLightAngle = 12.5f;
         float m_SpotLightOuterAngle = 17.5f;
 
+        // PBR parameters
+        glm::vec3 m_AlbedoFactor = glm::vec3(0.8f, 0.1f, 0.1f); // Beautiful custom primary color
+        float m_MetallicFactor = 0.5f;
+        float m_RoughnessFactor = 0.5f;
+        float m_AOFactor = 1.0f;
+
         static Application* s_Instance;
     };
 

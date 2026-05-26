@@ -1,4 +1,5 @@
 #include "Renderer/Framebuffer.h"
+#include "Renderer/RenderStateManager.h"
 #include <glad/glad.h>
 #include <iostream>
 #include <stdexcept>
@@ -21,6 +22,7 @@ namespace Avalon {
         static GLenum GLTextureFormatFromFramebufferFormat(FramebufferTextureFormat format) {
             switch (format) {
                 case FramebufferTextureFormat::RGBA8: return GL_RGBA8;
+                case FramebufferTextureFormat::RGBA16F: return GL_RGBA16F;
                 case FramebufferTextureFormat::DEPTH24STENCIL8: return GL_DEPTH24_STENCIL8;
                 case FramebufferTextureFormat::DEPTH_COMPONENT: return GL_DEPTH_COMPONENT24;
                 default: return 0;
@@ -138,7 +140,7 @@ namespace Avalon {
 
     void Framebuffer::Bind() {
         glBindFramebuffer(GL_FRAMEBUFFER, m_RendererID);
-        glViewport(0, 0, m_Specification.Width, m_Specification.Height);
+        RenderStateManager::SetViewport(0, 0, m_Specification.Width, m_Specification.Height);
     }
 
     void Framebuffer::Unbind() {

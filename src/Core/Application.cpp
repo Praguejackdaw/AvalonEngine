@@ -13,6 +13,7 @@
 #include "Resource/ResourceManager.h"
 #include "Renderer/ForwardRenderer.h"
 #include "Resource/Material.h"
+#include "Renderer/RenderStateManager.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -69,7 +70,7 @@ namespace Avalon {
         FramebufferSpecification fbSpec;
         fbSpec.Width = m_Window->GetWidth();
         fbSpec.Height = m_Window->GetHeight();
-        fbSpec.Attachments = { FramebufferTextureFormat::RGBA8, FramebufferTextureFormat::DEPTH24STENCIL8 };
+        fbSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH24STENCIL8 };
         m_Framebuffer = std::make_unique<Framebuffer>(fbSpec);
 
         // Load Default Shader (will read vertex/fragment code)
@@ -227,8 +228,14 @@ namespace Avalon {
         // Retrieve and configure standard material
         static std::shared_ptr<Material> defaultMaterial = nullptr;
         if (!defaultMaterial) {
-            defaultMaterial = BlinnPhongMaterial::Create();
+            defaultMaterial = PBRMaterial::Create(nullptr, nullptr, nullptr, nullptr, m_AlbedoFactor, m_MetallicFactor, m_RoughnessFactor, m_AOFactor);
         }
+
+        // Dynamically update PBR factors
+        defaultMaterial->SetAlbedoFactor(m_AlbedoFactor);
+        defaultMaterial->SetMetallicFactor(m_MetallicFactor);
+        defaultMaterial->SetRoughnessFactor(m_RoughnessFactor);
+        defaultMaterial->SetAOFactor(m_AOFactor);
 
         // Submit draw package
         m_Renderer->Submit(m_CubeVAO, m_Shader, defaultMaterial, model);
@@ -240,7 +247,7 @@ namespace Avalon {
 
             // Directional Light
             DirectionalLight dirLight;
-            dirLight.Direction = m_DirLightDir;
+            dirLight.Direction = glm::length(m_DirLightDir) > 0.0001f ? glm::normalize(m_DirLightDir) : glm::vec3(0.0f, -1.0f, 0.0f);
             dirLight.Color = m_DirLightColor;
             dirLight.Intensity = m_DirLightIntensity;
             lightManager->SetDirectionalLight(dirLight);
@@ -279,6 +286,9 @@ namespace Avalon {
         
         m_Framebuffer->Unbind();
 
+        // DSA: Restore viewport state to main window size to prevent viewport leakage
+        RenderStateManager::SetViewport(0, 0, m_Window->GetWidth(), m_Window->GetHeight());
+
         // 2. On-screen Pass (Clear main screen and draw GUI)
         RenderCommandAPI::SetClearColor(glm::vec4(0.05f, 0.05f, 0.06f, 1.0f));
         Renderer::Clear();
@@ -310,7 +320,6 @@ namespace Avalon {
         if (ImGui::CollapsingHeader("Global Lighting Adjuster", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Directional Light:");
             ImGui::SliderFloat3("Direction##Dir", &m_DirLightDir.x, -1.0f, 1.0f);
-            m_DirLightDir = glm::normalize(m_DirLightDir);
             ImGui::ColorEdit3("Color##Dir", &m_DirLightColor.x);
             ImGui::SliderFloat("Intensity##Dir", &m_DirLightIntensity, 0.0f, 5.0f);
 
@@ -331,6 +340,13 @@ namespace Avalon {
             if (m_SpotLightAngle > m_SpotLightOuterAngle) {
                 m_SpotLightOuterAngle = m_SpotLightAngle + 2.0f;
             }
+        }
+
+        if (ImGui::CollapsingHeader("PBR Material Adjuster", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::ColorEdit3("Albedo Factor##PBR", &m_AlbedoFactor.r);
+            ImGui::SliderFloat("Metallic Factor##PBR", &m_MetallicFactor, 0.0f, 1.0f);
+            ImGui::SliderFloat("Roughness Factor##PBR", &m_RoughnessFactor, 0.0f, 1.0f);
+            ImGui::SliderFloat("AO Factor##PBR", &m_AOFactor, 0.0f, 1.0f);
         }
 
         if (ImGui::CollapsingHeader("Simulation Controls", ImGuiTreeNodeFlags_DefaultOpen)) {

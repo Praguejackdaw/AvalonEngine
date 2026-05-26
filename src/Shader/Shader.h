@@ -33,6 +33,7 @@ namespace Avalon {
 
         const std::string& GetName() const { return m_Name; }
         uint32_t GetRendererID() const { return m_RendererID; }
+        uint32_t GetShaderID() const { return m_ShaderID; }
 
     private:
         std::string ReadFile(const std::string& filepath);
@@ -42,9 +43,12 @@ namespace Avalon {
 
     private:
         uint32_t m_RendererID = 0;
+        uint32_t m_ShaderID = 0;
         std::string m_Name;
         std::string m_FilePath;
         std::unordered_map<std::string, int> m_UniformLocationCache;
+
+        static uint32_t s_NextShaderID;
     };
 
 } // namespace Avalon

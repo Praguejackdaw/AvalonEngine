@@ -17,8 +17,8 @@ namespace Avalon {
     public:
         virtual ~RenderCommand() = default;
 
-        // Executes the command on the GPU
-        virtual void Execute() = 0;
+        // Executes the command on the GPU using state deduplication tracking
+        virtual void Execute(uint32_t& activeShaderID, uint32_t& activeMaterialID) = 0;
 
         // Generates the sort key for minimizing state changes
         virtual uint64_t GetSortKey() const = 0;
@@ -41,7 +41,7 @@ namespace Avalon {
 
         ~MeshDrawCommand() override = default;
 
-        void Execute() override;
+        void Execute(uint32_t& activeShaderID, uint32_t& activeMaterialID) override;
         uint64_t GetSortKey() const override { return m_SortKey; }
 
         const std::shared_ptr<Shader>& GetShader() const { return m_Shader; }

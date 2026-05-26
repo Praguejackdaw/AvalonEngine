@@ -101,16 +101,45 @@ namespace Avalon {
         if (mesh->mMaterialIndex >= 0) {
             aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
 
-            // Load Albedo and Specular texture maps
+            // Load PBR texture maps
             std::shared_ptr<Texture> albedoTex = LoadMaterialTexture(material, aiTextureType_DIFFUSE);
-            std::shared_ptr<Texture> specularTex = LoadMaterialTexture(material, aiTextureType_SPECULAR);
+            
+            std::shared_ptr<Texture> mrTex = LoadMaterialTexture(material, aiTextureType_UNKNOWN);
+            if (!mrTex) {
+                mrTex = LoadMaterialTexture(material, aiTextureType_METALNESS);
+            }
 
-            float shininess = 32.0f;
-            material->Get(AI_MATKEY_SHININESS, shininess);
+            std::shared_ptr<Texture> normalTex = LoadMaterialTexture(material, aiTextureType_NORMALS);
+            if (!normalTex) {
+                normalTex = LoadMaterialTexture(material, aiTextureType_HEIGHT);
+            }
 
-            meshMaterial = BlinnPhongMaterial::Create(albedoTex, specularTex, shininess);
+            std::shared_ptr<Texture> aoTex = LoadMaterialTexture(material, aiTextureType_LIGHTMAP);
+            if (!aoTex) {
+                aoTex = LoadMaterialTexture(material, aiTextureType_AMBIENT);
+            }
+
+            // Load PBR Factors
+            glm::vec3 albedoFactor(1.0f);
+            aiColor3D diffuseColor(1.0f, 1.0f, 1.0f);
+            if (material->Get(AI_MATKEY_COLOR_DIFFUSE, diffuseColor) == AI_SUCCESS) {
+                albedoFactor = glm::vec3(diffuseColor.r, diffuseColor.g, diffuseColor.b);
+            }
+
+            float metallicFactor = 1.0f;
+            material->Get(AI_MATKEY_METALLIC_FACTOR, metallicFactor);
+
+            float roughnessFactor = 1.0f;
+            material->Get(AI_MATKEY_ROUGHNESS_FACTOR, roughnessFactor);
+
+            float aoFactor = 1.0f;
+
+            meshMaterial = PBRMaterial::Create(
+                albedoTex, mrTex, normalTex, aoTex,
+                albedoFactor, metallicFactor, roughnessFactor, aoFactor
+            );
         } else {
-            meshMaterial = BlinnPhongMaterial::Create();
+            meshMaterial = PBRMaterial::Create();
         }
 
         return Mesh(vertices, indices, meshMaterial);

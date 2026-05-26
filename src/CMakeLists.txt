@@ -30,6 +30,8 @@ add_executable(AvalonEngine
     Renderer/RenderQueue.cpp
     Renderer/ForwardRenderer.h
     Renderer/ForwardRenderer.cpp
+    Renderer/RenderStateManager.h
+    Renderer/RenderStateManager.cpp
     
     Shader/Shader.h
     Shader/Shader.cpp
