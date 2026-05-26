@@ -32,6 +32,13 @@ add_executable(AvalonEngine
     Renderer/ForwardRenderer.cpp
     Renderer/RenderStateManager.h
     Renderer/RenderStateManager.cpp
+    Renderer/RenderPass.h
+    Renderer/ShadowMap.h
+    Renderer/ShadowMap.cpp
+    Renderer/LightCamera.h
+    Renderer/LightCamera.cpp
+    Renderer/ShadowPass.h
+    Renderer/ShadowPass.cpp
     
     Shader/Shader.h
     Shader/Shader.cpp

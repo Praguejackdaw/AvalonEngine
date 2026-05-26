@@ -8,6 +8,7 @@ layout(location = 2) in vec2 a_TexCoords;
 layout(location = 0) out vec3 v_FragPos;
 layout(location = 1) out vec3 v_Normal;
 layout(location = 2) out vec2 v_TexCoords;
+layout(location = 3) out vec4 v_FragPosLightSpace;
 
 // Global Camera UBO (Binding slot 0)
 layout (std140, binding = 0) uniform CameraData {
@@ -18,11 +19,13 @@ layout (std140, binding = 0) uniform CameraData {
 
 uniform mat4 u_Model;
 uniform mat3 u_NormalMatrix;
+uniform mat4 u_LightSpaceMatrix;
 
 void main() {
     v_FragPos = vec3(u_Model * vec4(a_Position, 1.0));
     v_Normal = u_NormalMatrix * a_Normal;
     v_TexCoords = a_TexCoords;
+    v_FragPosLightSpace = u_LightSpaceMatrix * vec4(v_FragPos, 1.0);
 
     gl_Position = u_Projection * u_View * vec4(v_FragPos, 1.0);
 }
@@ -35,6 +38,7 @@ layout(location = 0) out vec4 color;
 layout(location = 0) in vec3 v_FragPos;
 layout(location = 1) in vec3 v_Normal;
 layout(location = 2) in vec2 v_TexCoords;
+layout(location = 3) in vec4 v_FragPosLightSpace;
 
 const float PI = 3.14159265359;
 
@@ -42,21 +46,18 @@ const float PI = 3.14159265359;
 
 struct DirectionalLight {
     vec3 direction;
-    float padding1;
     vec3 color;
     float intensity;
 };
 
 struct PointLight {
     vec3 position;
-    float padding1;
     vec3 color;
     float intensity;
     
     float constant;
     float linear;
     float quadratic;
-    float padding2;
 };
 
 struct SpotLight {
@@ -71,7 +72,6 @@ struct SpotLight {
     float constant;
     float linear;
     float quadratic;
-    float padding;
 };
 
 // Global Lights SSBO (Binding slot 1, std430)
@@ -79,8 +79,6 @@ layout (std430, binding = 1) readonly buffer LightData {
     DirectionalLight u_DirLight;
     uint u_PointLightCount;
     uint u_SpotLightCount;
-    float padding1;
-    float padding2;
     PointLight u_PointLights[256];
     SpotLight u_SpotLights[256];
 };
@@ -111,6 +109,10 @@ layout (std140, binding = 0) uniform CameraData {
     mat4 u_Projection;
     vec3 u_ViewPos;
 };
+
+uniform sampler2DShadow u_ShadowMap;
+uniform float u_ShadowBiasConstant;
+uniform int u_PCFKernelSize;
 
 // ---- Modular PBR BRDF Functions ----
 
@@ -169,6 +171,48 @@ vec3 GetNormalFromMap() {
     mat3 TBN = mat3(T, B, N);
 
     return normalize(TBN * tangentNormal);
+}
+
+// ---- Shadow Map Soft Filtering ----
+float CalculateShadow(vec4 fragPosLightSpace, vec3 normal, vec3 lightDir) {
+    // Perform perspective divide
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    
+    // Transform from [-1, 1] range to [0, 1] UV coordinates
+    projCoords = projCoords * 0.5 + 0.5;
+    
+    // If coords are beyond the far plane of shadow map, return no shadow
+    if (projCoords.z > 1.0) {
+        return 0.0;
+    }
+    
+    // Dynamic Slope-Scale Bias
+    float bias = max(u_ShadowBiasConstant * (1.0 - max(dot(normal, lightDir), 0.0)), u_ShadowBiasConstant * 0.1);
+    
+    // Hardware-Accelerated PCF Filter using sampler2DShadow
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(u_ShadowMap, 0);
+    
+    int range = clamp(u_PCFKernelSize, 0, 3);
+    int count = 0;
+    
+    float compareDepth = projCoords.z - bias;
+    
+    for (int x = -range; x <= range; ++x) {
+        for (int y = -range; y <= range; ++y) {
+            // texture(sampler2DShadow, vec3) performs hardware depth comparison and bilinear filtering.
+            // Returns 1.0 (fully lit) to 0.0 (fully shadowed).
+            float isLit = texture(u_ShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, compareDepth));
+            shadow += (1.0 - isLit);
+            count++;
+        }
+    }
+    
+    if (count > 0) {
+        shadow /= float(count);
+    }
+    
+    return shadow;
 }
 
 // ---- Core Cook-Torrance Light Integration ----
@@ -230,11 +274,13 @@ void main() {
     // 4. Lighting Accumulation
     vec3 lo = vec3(0.0);
 
-    // Directional Light pass
+    // Directional Light pass (scaled by shadow mapping factor)
     {
         vec3 L = normalize(-u_DirLight.direction);
         vec3 radiance = u_DirLight.color * u_DirLight.intensity;
-        lo += ComputePBR(L, V, N, F0, albedo, roughness, metallic, radiance);
+        
+        float shadow = CalculateShadow(v_FragPosLightSpace, N, L);
+        lo += (1.0 - shadow) * ComputePBR(L, V, N, F0, albedo, roughness, metallic, radiance);
     }
 
     // Point Lights pass

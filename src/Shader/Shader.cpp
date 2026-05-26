@@ -170,6 +170,7 @@ namespace Avalon {
         SetInt("u_Material.MetallicRoughnessMap", 1);
         SetInt("u_Material.NormalMap", 2);
         SetInt("u_Material.AOMap", 3);
+        SetInt("u_ShadowMap", 4);
     }
 
     void Shader::Bind() const {

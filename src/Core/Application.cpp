@@ -14,6 +14,9 @@
 #include "Renderer/ForwardRenderer.h"
 #include "Resource/Material.h"
 #include "Renderer/RenderStateManager.h"
+#include "Renderer/ShadowPass.h"
+#include "Renderer/ShadowMap.h"
+#include "Renderer/LightCamera.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -72,6 +75,10 @@ namespace Avalon {
         fbSpec.Height = m_Window->GetHeight();
         fbSpec.Attachments = { FramebufferTextureFormat::RGBA16F, FramebufferTextureFormat::DEPTH24STENCIL8 };
         m_Framebuffer = std::make_unique<Framebuffer>(fbSpec);
+
+        // Initialize high-precision shadow pass
+        m_ShadowPass = ShadowPass::Create(2048, 2048);
+        m_ShadowPass->Init();
 
         // Load Default Shader (will read vertex/fragment code)
         m_Shader = std::make_shared<Shader>("assets/shaders/default.glsl");
@@ -213,14 +220,17 @@ namespace Avalon {
     }
 
     void Application::OnRender() {
-        // 1. Off-screen Rendering Pass (Render Scene to custom Framebuffer)
+        // Calculate Model Transform first so it can be passed to the shadow depth pass
+        glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(m_RotationAngle), glm::vec3(0.5f, 1.0f, 0.0f));
+
+        // 1. Render Shadow Depth Pass (renders the procedural cube as caster)
+        m_ShadowPass->ExecuteShadowDepthPass(m_Scene.get(), m_DirLightDir, m_Camera, m_CubeVAO, model);
+
+        // 2. Off-screen Rendering Pass (Render Scene to custom Framebuffer)
         m_Framebuffer->Bind();
         
         RenderCommandAPI::SetClearColor(m_ClearColor);
         Renderer::Clear();
-
-        // Bind Shader and calculate Model Transform
-        glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(m_RotationAngle), glm::vec3(0.5f, 1.0f, 0.0f));
 
         // Begin ForwardRenderer Frame Setup
         m_Renderer->BeginFrame(m_Camera);
@@ -236,6 +246,14 @@ namespace Avalon {
         defaultMaterial->SetMetallicFactor(m_MetallicFactor);
         defaultMaterial->SetRoughnessFactor(m_RoughnessFactor);
         defaultMaterial->SetAOFactor(m_AOFactor);
+
+        // Upload Shadow mapping uniforms to shader context
+        m_Shader->SetMat4("u_LightSpaceMatrix", m_ShadowPass->GetLightCamera()->GetLightSpaceMatrix());
+        m_Shader->SetFloat("u_ShadowBiasConstant", m_ShadowBiasConstant);
+        m_Shader->SetInt("u_PCFKernelSize", m_PCFKernelSize);
+
+        // Bind shadow map depth texture to Texture Slot 4 using DSA
+        glBindTextureUnit(4, m_ShadowPass->GetShadowMap()->GetDepthTextureID());
 
         // Submit draw package
         m_Renderer->Submit(m_CubeVAO, m_Shader, defaultMaterial, model);
@@ -347,6 +365,15 @@ namespace Avalon {
             ImGui::SliderFloat("Metallic Factor##PBR", &m_MetallicFactor, 0.0f, 1.0f);
             ImGui::SliderFloat("Roughness Factor##PBR", &m_RoughnessFactor, 0.0f, 1.0f);
             ImGui::SliderFloat("AO Factor##PBR", &m_AOFactor, 0.0f, 1.0f);
+        }
+
+        if (ImGui::CollapsingHeader("Shadow Mapping Adjuster", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::SliderFloat("Shadow Bias##GUI", &m_ShadowBiasConstant, 0.0001f, 0.01f, "%.4f");
+            ImGui::SliderInt("PCF Kernel Size##GUI", &m_PCFKernelSize, 0, 3);
+            
+            ImGui::Text("Shadow Depth Map Preview:");
+            ImTextureID depthTexID = (ImTextureID)(intptr_t)m_ShadowPass->GetShadowMap()->GetDepthTextureID();
+            ImGui::Image(depthTexID, ImVec2(128, 128), ImVec2(0, 1), ImVec2(1, 0));
         }
 
         if (ImGui::CollapsingHeader("Simulation Controls", ImGuiTreeNodeFlags_DefaultOpen)) {

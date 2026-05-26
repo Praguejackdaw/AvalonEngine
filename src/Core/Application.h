@@ -16,6 +16,7 @@ namespace Avalon {
     class Scene;
     class Framebuffer;
     class ForwardRenderer;
+    class ShadowPass;
 
     struct ApplicationSpecification {
         std::string Name = "Avalon Engine";
@@ -95,6 +96,11 @@ namespace Avalon {
         float m_MetallicFactor = 0.5f;
         float m_RoughnessFactor = 0.5f;
         float m_AOFactor = 1.0f;
+
+        // Shadow parameters
+        std::unique_ptr<ShadowPass> m_ShadowPass;
+        float m_ShadowBiasConstant = 0.002f;
+        int m_PCFKernelSize = 1; // 3x3 filter
 
         static Application* s_Instance;
     };
