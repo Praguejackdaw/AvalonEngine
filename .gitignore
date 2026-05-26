@@ -74,4 +74,5 @@ FetchContent/
 # Runtime Config & Cache
 # ==========================================
 imgui.ini
-reports/  
+reports/
+CLAUDE.md
