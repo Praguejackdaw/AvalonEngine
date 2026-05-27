@@ -15,8 +15,10 @@ namespace Avalon {
     class VertexArray;
     class Scene;
     class Framebuffer;
-    class ForwardRenderer;
     class ShadowPass;
+    class GeometryPass;
+    class LightingPass;
+    class LightManager;
 
     struct ApplicationSpecification {
         std::string Name = "Avalon Engine";
@@ -65,8 +67,12 @@ namespace Avalon {
         std::shared_ptr<VertexArray> m_CubeVAO;
         
         std::unique_ptr<Scene> m_Scene;
-        std::unique_ptr<Framebuffer> m_Framebuffer;
-        std::shared_ptr<ForwardRenderer> m_Renderer;
+        std::unique_ptr<Framebuffer> m_Framebuffer; // Offscreen composite
+        
+        std::unique_ptr<GeometryPass> m_GeometryPass;
+        std::unique_ptr<LightingPass> m_LightingPass;
+        std::shared_ptr<LightManager> m_LightManager;
+        uint32_t m_CameraUBO = 0;
 
         bool m_Running = true;
         float m_LastFrameTime = 0.0f;

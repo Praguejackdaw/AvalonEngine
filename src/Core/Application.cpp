@@ -11,7 +11,10 @@
 #include "Resource/Scene.h"
 #include "Renderer/Framebuffer.h"
 #include "Resource/ResourceManager.h"
-#include "Renderer/ForwardRenderer.h"
+#include "Renderer/GeometryPass.h"
+#include "Renderer/LightingPass.h"
+#include "Renderer/GBuffer.h"
+#include "Renderer/LightManager.h"
 #include "Resource/Material.h"
 #include "Renderer/RenderStateManager.h"
 #include "Renderer/ShadowPass.h"
@@ -24,6 +27,12 @@
 #include <iostream>
 
 namespace Avalon {
+
+    struct alignas(16) GPUCameraBufferData {
+        glm::mat4 ViewProjection;
+        glm::vec3 CameraPosition;
+        float Padding = 0.0f;
+    };
 
     Application* Application::s_Instance = nullptr;
 
@@ -50,9 +59,20 @@ namespace Avalon {
         // Initialize Renderer base configurations
         Renderer::Init();
 
-        // Initialize ForwardRenderer Orchestrator
-        m_Renderer = ForwardRenderer::Create();
-        m_Renderer->Init();
+        // Initialize Camera UBO
+        glCreateBuffers(1, &m_CameraUBO);
+        glNamedBufferStorage(m_CameraUBO, sizeof(GPUCameraBufferData), nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+        // Initialize LightManager
+        m_LightManager = LightManager::Create();
+        m_LightManager->Init();
+
+        // Initialize Deferred Pipeline Passes
+        m_GeometryPass = GeometryPass::Create(m_Specification.Width, m_Specification.Height);
+        m_GeometryPass->Init();
+
+        m_LightingPass = LightingPass::Create();
+        m_LightingPass->Init();
 
         // Initialize UI Layer (ImGui)
         m_UIManager = std::make_unique<UIManager>();
@@ -159,11 +179,15 @@ namespace Avalon {
     void Application::Shutdown() {
         m_Scene.reset();
         m_Framebuffer.reset();
-        if (m_Renderer) {
-            m_Renderer->Shutdown();
-            m_Renderer.reset();
-        }
+        m_GeometryPass.reset();
+        m_LightingPass.reset();
+        m_LightManager.reset();
         ResourceManager::Clear();
+
+        if (m_CameraUBO != 0) {
+            glDeleteBuffers(1, &m_CameraUBO);
+            m_CameraUBO = 0;
+        }
 
         m_UIManager->Shutdown();
         Renderer::Shutdown();
@@ -205,6 +229,7 @@ namespace Avalon {
         if (m_Window->GetWidth() != m_Framebuffer->GetSpecification().Width ||
             m_Window->GetHeight() != m_Framebuffer->GetSpecification().Height) {
             m_Framebuffer->Resize(m_Window->GetWidth(), m_Window->GetHeight());
+            m_GeometryPass->Resize(m_Window->GetWidth(), m_Window->GetHeight());
         }
 
         // Update camera position/rotation via keyboard and mouse polling
@@ -226,51 +251,38 @@ namespace Avalon {
         // 1. Render Shadow Depth Pass (renders the procedural cube as caster)
         m_ShadowPass->ExecuteShadowDepthPass(m_Scene.get(), m_DirLightDir, m_Camera, m_CubeVAO, model);
 
-        // 2. Off-screen Rendering Pass (Render Scene to custom Framebuffer)
-        m_Framebuffer->Bind();
-        
-        RenderCommandAPI::SetClearColor(m_ClearColor);
-        Renderer::Clear();
-
-        // Begin ForwardRenderer Frame Setup
-        m_Renderer->BeginFrame(m_Camera);
+        // Update Camera matrices in UBO and bind to slot 0 globally
+        GPUCameraBufferData cameraData;
+        cameraData.ViewProjection = m_Camera->GetProjectionMatrix() * m_Camera->GetViewMatrix();
+        cameraData.CameraPosition = m_Camera->GetPosition();
+        glNamedBufferSubData(m_CameraUBO, 0, sizeof(GPUCameraBufferData), &cameraData);
+        glBindBufferBase(GL_UNIFORM_BUFFER, 0, m_CameraUBO);
 
         // Retrieve and configure standard material
         static std::shared_ptr<Material> defaultMaterial = nullptr;
         if (!defaultMaterial) {
             defaultMaterial = PBRMaterial::Create(nullptr, nullptr, nullptr, nullptr, m_AlbedoFactor, m_MetallicFactor, m_RoughnessFactor, m_AOFactor);
         }
-
-        // Dynamically update PBR factors
         defaultMaterial->SetAlbedoFactor(m_AlbedoFactor);
         defaultMaterial->SetMetallicFactor(m_MetallicFactor);
         defaultMaterial->SetRoughnessFactor(m_RoughnessFactor);
         defaultMaterial->SetAOFactor(m_AOFactor);
 
-        // Upload Shadow mapping uniforms to shader context
-        m_Shader->SetMat4("u_LightSpaceMatrix", m_ShadowPass->GetLightCamera()->GetLightSpaceMatrix());
-        m_Shader->SetFloat("u_ShadowBiasConstant", m_ShadowBiasConstant);
-        m_Shader->SetInt("u_PCFKernelSize", m_PCFKernelSize);
+        // 2. Geometry Pass (writes to G-Buffer MRT)
+        m_GeometryPass->BeginGeometryPass(m_Camera);
+        m_GeometryPass->RenderMesh(m_CubeVAO, defaultMaterial, model);
+        m_GeometryPass->EndGeometryPass();
 
-        // Bind shadow map depth texture to Texture Slot 4 using DSA
-        glBindTextureUnit(4, m_ShadowPass->GetShadowMap()->GetDepthTextureID());
+        // 3. Update active LightManager UBO structures
+        if (m_LightManager) {
+            m_LightManager->ClearLights();
 
-        // Submit draw package
-        m_Renderer->Submit(m_CubeVAO, m_Shader, defaultMaterial, model);
-
-        // Update active LightManager UBO structures
-        auto& lightManager = m_Renderer->GetLightManager();
-        if (lightManager) {
-            lightManager->ClearLights();
-
-            // Directional Light
             DirectionalLight dirLight;
             dirLight.Direction = glm::length(m_DirLightDir) > 0.0001f ? glm::normalize(m_DirLightDir) : glm::vec3(0.0f, -1.0f, 0.0f);
             dirLight.Color = m_DirLightColor;
             dirLight.Intensity = m_DirLightIntensity;
-            lightManager->SetDirectionalLight(dirLight);
+            m_LightManager->SetDirectionalLight(dirLight);
 
-            // Point Light
             PointLight pLight;
             pLight.Position = m_PointLightPos;
             pLight.Color = m_PointLightColor;
@@ -278,16 +290,12 @@ namespace Avalon {
             pLight.Constant = 1.0f;
             pLight.Linear = 0.09f;
             pLight.Quadratic = 0.032f;
-            lightManager->AddPointLight(pLight);
+            m_LightManager->AddPointLight(pLight);
 
-            // Spot Light (places at camera position looking forward)
             SpotLight sLight;
             sLight.Position = m_Camera->GetPosition();
-            
-            // Derive camera forward vector from view matrix (third column represents camera z-axis, we invert it for forward)
             glm::mat4 view = m_Camera->GetViewMatrix();
             glm::vec3 cameraForward = -glm::vec3(view[0][2], view[1][2], view[2][2]);
-            
             sLight.Direction = cameraForward;
             sLight.Color = m_SpotLightColor;
             sLight.Intensity = m_SpotLightIntensity;
@@ -296,12 +304,25 @@ namespace Avalon {
             sLight.Constant = 1.0f;
             sLight.Linear = 0.09f;
             sLight.Quadratic = 0.032f;
-            lightManager->AddSpotLight(sLight);
+            m_LightManager->AddSpotLight(sLight);
+            m_LightManager->UpdateGPUBuffer();
+            m_LightManager->BindLightBuffer(1);
         }
 
-        // Execute drawing pipeline phases
-        m_Renderer->EndFrame();
-        
+        // 4. Lighting Pass (Render Fullscreen Quad to composite Framebuffer)
+        m_Framebuffer->Bind();
+        RenderCommandAPI::SetClearColor(m_ClearColor);
+        Renderer::Clear();
+
+        m_LightingPass->ExecuteLightingPass(
+            m_GeometryPass->GetGBuffer(), 
+            m_Camera, 
+            m_ShadowPass->GetShadowMap()->GetDepthTextureID(),
+            m_ShadowPass->GetLightCamera()->GetLightSpaceMatrix(),
+            m_ShadowBiasConstant,
+            m_PCFKernelSize
+        );
+
         m_Framebuffer->Unbind();
 
         // DSA: Restore viewport state to main window size to prevent viewport leakage
@@ -320,7 +341,7 @@ namespace Avalon {
         if (ImGui::CollapsingHeader("System Diagnostics", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("FPS: %.1f FPS", ImGui::GetIO().Framerate);
             ImGui::Text("Frame Time: %.3f ms/frame", 1000.0f / ImGui::GetIO().Framerate);
-            ImGui::Text("Active Draw Calls: %u", m_Renderer ? m_Renderer->GetDrawCallCount() : 0);
+            ImGui::Text("Active Draw Calls: %u", 2); // 1 for geometry, 1 for lighting
             ImGui::Text("Graphics API: OpenGL 4.5 Core Profile (DSA)");
             
             const char* gpuName = (const char*)glGetString(GL_RENDERER);
@@ -376,6 +397,39 @@ namespace Avalon {
             ImGui::Image(depthTexID, ImVec2(128, 128), ImVec2(0, 1), ImVec2(1, 0));
         }
 
+        if (ImGui::CollapsingHeader("G-Buffer Visualizer", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImVec2 gbSize(160, 90);
+            const auto& gbuffer = m_GeometryPass->GetGBuffer();
+            
+            // First Row: Depth & Normal
+            ImGui::BeginGroup();
+            ImGui::Text("Depth");
+            ImGui::Image((ImTextureID)(intptr_t)gbuffer->GetDepthTexture(), gbSize, ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::EndGroup();
+            
+            ImGui::SameLine();
+            
+            ImGui::BeginGroup();
+            ImGui::Text("Normal");
+            ImGui::Image((ImTextureID)(intptr_t)gbuffer->GetNormalTexture(), gbSize, ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::EndGroup();
+            
+            ImGui::Spacing();
+            
+            // Second Row: Albedo & Metallic/Roughness
+            ImGui::BeginGroup();
+            ImGui::Text("Albedo");
+            ImGui::Image((ImTextureID)(intptr_t)gbuffer->GetAlbedoTexture(), gbSize, ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::EndGroup();
+            
+            ImGui::SameLine();
+            
+            ImGui::BeginGroup();
+            ImGui::Text("Metallic/Roughness");
+            ImGui::Image((ImTextureID)(intptr_t)gbuffer->GetMetallicRoughnessTexture(), gbSize, ImVec2(0, 1), ImVec2(1, 0));
+            ImGui::EndGroup();
+        }
+
         if (ImGui::CollapsingHeader("Simulation Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Checkbox("Auto-Rotate Object", &m_AutoRotate);
             if (m_AutoRotate) {
@@ -386,12 +440,8 @@ namespace Avalon {
             
             ImGui::Separator();
             
-            bool wireframe = m_Renderer ? m_Renderer->IsWireframeMode() : false;
-            if (ImGui::Checkbox("Wireframe Mode", &wireframe)) {
-                if (m_Renderer) {
-                    m_Renderer->SetWireframeMode(wireframe);
-                }
-            }
+            // Wireframe toggle removed for deferred as it breaks GBuffer
+
 
             ImGui::Separator();
             
