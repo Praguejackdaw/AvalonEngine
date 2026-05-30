@@ -1,5 +1,4 @@
-![image](https://github.com/Praguejackdaw/AvalonEngine/blob/main/demo.gif)
-
+![Renderer Demo](https://github.com/Praguejackdaw/AvalonEngine/blob/main/demo.gif)
 
 本引擎支持跨平台编译，您可以使用以下 CMake 命令在本地一键构建并运行项目：
 ```bash
